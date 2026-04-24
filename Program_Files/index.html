@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S_Reposer v4.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Outfit', 'Malgun Gothic', sans-serif;
+  background: #0d1117;
+  background-image: radial-gradient(ellipse at top, #1a2a3a 0%, #0d1117 70%);
+  color: #e6edf3; height: 100vh; overflow: hidden;
+}
+.app { display: flex; height: 100vh; overflow: hidden; }
+
+/* ─── Sidebar ─── */
+.sidebar {
+  width: 320px; flex-shrink: 0;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  background: #0d1117;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.sidebar-header {
+  padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sidebar-title { font-size: 16px; font-weight: 700; color: #00ffc3; }
+.sidebar-hint { font-size: 10px; color: #aaa; line-height: 1.4; }
+
+#sample-list { flex: 1; overflow-y: auto; padding: 15px; }
+.lib-group { margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.02); }
+.grade-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: rgba(255,255,255,0.07);
+  cursor: pointer; user-select: none; font-weight: 700; font-size: 13px;
+  color: #00ffc3;
+}
+.grade-header:hover { background: rgba(255,255,255,0.12); }
+.grade-toggle { font-size: 10px; transition: transform 0.2s; }
+.grade-toggle.open { transform: rotate(90deg); }
+.grade-items { display: flex; flex-direction: column; gap: 0; }
+.grade-items.collapsed { display: none; }
+
+/* Library item */
+.lib-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 12px; font-size: 12px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  cursor: grab; user-select: none;
+  transition: background 0.15s;
+}
+.lib-item:hover { background: rgba(255,255,255,0.08); }
+.lib-item.used { opacity: 0.38; cursor: not-allowed; }
+.lib-item[draggable="true"]:active { cursor: grabbing; }
+.lib-pass { font-weight: 600; }
+.lib-add { background: #00b894; border: none; color: #fff;
+  border-radius: 4px; padding: 2px 7px; font-size: 11px; cursor: pointer; flex-shrink: 0; }
+.lib-add:hover { background: #009974; }
+
+/* ─── Workspace ─── */
+.workspace { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.toolbar {
+  background: #161b22; padding: 11px 18px;
+  display: flex; gap: 10px; align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.07); flex-shrink: 0;
+  overflow-x: auto;
+}
+.toolbar-title { font-size: 18px; font-weight: 700; flex: 1; }
+.btn { border: none; color: #fff; padding: 8px 16px; border-radius: 6px;
+  font-weight: 700; cursor: pointer; transition: 0.18s; font-size: 12px; }
+.btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-export { background: linear-gradient(135deg, #00b894, #00d2ff); }
+.btn-clear  { background: #c0392b; }
+.btn-file   { background: #2980b9; position: relative; }
+.btn-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* Grid scroll area: scrolls in both directions */
+.grid-scroll {
+  flex: 1;
+  overflow: auto;
+  background: #0d1117;
+}
+.grid-inner {
+  padding: 30px;
+  width: max-content;
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Report grid: width fits all columns naturally */
+#report-grid {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  width: fit-content;
+  align-items: start;
+  gap: 0; border: 2px solid #000; background: #fff; color: #000;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.grid-col {
+  display: flex; flex-direction: column;
+  border-right: 1px solid #000; background: #fff; min-width: 150px;
+  /* grows with content — no max height */
+}
+.grid-col:last-child { border-right: none; }
+.header-container {
+  position: sticky; top: 0; z-index: 5;
+  width: 100%;
+}
+.col-header {
+  background: #1e2a3a; color: #fff;
+  text-align: center; font-weight: bold;
+  padding: 10px; border-bottom: 2px solid #000; font-size: 13px;
+  cursor: text; outline: none;
+  width: 100%;
+}
+.col-header:hover { background: #2d3e56; }
+.col-header:focus { background: #2d3e56; outline: 2px solid #00ffc3; outline-offset: -2px; }
+.remove-col-btn {
+  position: absolute; top: 5px; right: 5px;
+  background: rgba(200,0,0,0.9); color: #fff;
+  border: none; border-radius: 50%; width: 20px; height: 20px;
+  font-size: 11px; cursor: pointer; z-index: 10;
+  display: none; align-items: center; justify-content: center;
+  font-weight: bold; line-height: 1;
+}
+.header-container:hover .remove-col-btn { display: flex; }
+/* Drop target highlight */
+.grid-col.drag-over { outline: 3px dashed #00ffc3; outline-offset: -3px; }
+
+/* Sample card */
+.sample-card { position: relative; border-bottom: 1px solid #000; }
+.sample-card:last-child { border-bottom: none; }
+.remove-btn {
+  position: absolute; top: 5px; right: 5px;
+  background: rgba(200,0,0,0.9); color: #fff;
+  border: none; border-radius: 50%; width: 20px; height: 20px;
+  font-size: 11px; cursor: pointer; z-index: 50;
+  display: none; align-items: center; justify-content: center;
+  font-weight: bold; line-height: 1;
+}
+.sample-card:hover .remove-btn { display: flex; }
+
+/* Table */
+.sample-table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.sample-table td { border: 1px solid #000; padding: 0; vertical-align: top; overflow: hidden; }
+.img-cell { line-height: 0; background: #fff; }
+.img-cell img { width: 100%; height: auto; display: block; }
+.txt-cell {
+  background: #f1f2f6; text-align: center; vertical-align: middle;
+  font-size: 11px; font-weight: bold; padding: 2px;
+}
+
+/* Drop overlay */
+#drop-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.82);
+  backdrop-filter: blur(14px);
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 99999;
+}
+@media print {
+  .sidebar, .toolbar { display: none !important; }
+  body { background: #fff; overflow: visible; }
+  .grid-scroll { padding: 0; overflow: visible; }
+  #report-grid { box-shadow: none; margin: 0; }
+}
+</style>
+</head>
+<body>
+
+<div id="drop-overlay">
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:10px; width:450px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+    <h3 style="color:#00ffc3; margin-bottom:15px; border-bottom:1px solid #30363d; padding-bottom:10px;">⏳ 이미지 추출 작업 현황</h3>
+    <div id="overlay-msg" style="font-size: 16px; color: #fff; font-weight:bold; margin-bottom:10px;">준비 중...</div>
+    <div id="progress-log" style="height:180px; overflow-y:auto; background:#0d1117; border:1px solid #30363d; padding:10px; font-size:12px; color:#c9d1d9; font-family:monospace; line-height:1.6; border-radius:6px;"></div>
+  </div>
+</div>
+<div id="startup-modal" style="position:fixed; inset:0; background: radial-gradient(circle at 50% 0%, #172131, #090d14); z-index:999999; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden;">
+  <!-- Background glowing effects -->
+  <div style="position:absolute; top:-20%; left:-10%; width:50vw; height:50vw; background:radial-gradient(circle, rgba(0,255,195,0.12) 0%, transparent 60%); border-radius:50%; filter:blur(60px); animation: floatOrb 10s infinite ease-in-out;"></div>
+  <div style="position:absolute; bottom:-30%; right:-10%; width:60vw; height:60vw; background:radial-gradient(circle, rgba(0,184,255,0.08) 0%, transparent 60%); border-radius:50%; filter:blur(80px); animation: floatOrb 12s infinite ease-in-out reverse;"></div>
+
+  <div style="z-index: 10; text-align:center; transform:translateY(-10px);">
+    <h1 style="font-size:56px; font-weight:800; background: linear-gradient(135deg, #00ffc3 0%, #00b8ff 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:16px; letter-spacing:-1px;">절삭평가 도우미</h1>
+    <p style="color:#94a3b8; font-size:18px; font-weight:300; letter-spacing:0.5px;">원하시는 작업의 워크플로우를 선택해주세요.</p>
+  </div>
+
+  <div style="z-index: 10; display:flex; gap:36px; margin-top:50px;">
+    <!-- S_Reposer Card -->
+    <div class="hover-card" onclick="document.getElementById('startup-modal').style.opacity='0'; setTimeout(()=>document.getElementById('startup-modal').style.display='none', 400);" style="width:340px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:24px; padding:40px 32px; text-align:left; cursor:pointer; backdrop-filter:blur(24px); transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1); position:relative; overflow:hidden;">
+      <div class="card-glow" style="position:absolute; top:0; left:0; width:100%; height:100%; background:radial-gradient(circle at top right, rgba(0,255,195,0.15), transparent 60%); opacity:0; transition:0.4s;"></div>
+      <div style="width:64px; height:64px; border-radius:18px; background:linear-gradient(135deg, rgba(0,255,195,0.15), rgba(0,184,255,0.15)); display:flex; align-items:center; justify-content:center; margin-bottom:24px; box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+        <span style="font-size:28px;">📊</span>
+      </div>
+      <h2 style="font-size:24px; color:#fff; margin-bottom:14px; font-weight:700;">리포트 조립</h2>
+      <p style="color:#94a3b8; font-size:15px; line-height:1.65; font-weight:300; word-break:keep-all;">엑셀 파일을 불러와 자유롭게 레이아웃을 편집하고 병합하여 최종 결과 리포트를 완성합니다.</p>
+    </div>
+
+    <!-- Extractor Card -->
+    <div class="hover-card" onclick="runExtractor()" style="width:340px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:24px; padding:40px 32px; text-align:left; cursor:pointer; backdrop-filter:blur(24px); transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1); position:relative; overflow:hidden;">
+      <div class="card-glow" style="position:absolute; top:0; left:0; width:100%; height:100%; background:radial-gradient(circle at top right, rgba(0,184,255,0.15), rgba(138,43,226,0.1)); opacity:0; transition:0.4s;"></div>
+      <div style="width:64px; height:64px; border-radius:18px; background:linear-gradient(135deg, rgba(0,184,255,0.15), rgba(138,43,226,0.15)); display:flex; align-items:center; justify-content:center; margin-bottom:24px; box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+        <span style="font-size:28px;">📂</span>
+      </div>
+      <h2 style="font-size:24px; color:#fff; margin-bottom:14px; font-weight:700;">자동 이미지 추출</h2>
+      <p style="color:#94a3b8; font-size:15px; line-height:1.65; font-weight:300; word-break:keep-all;">분석 엑셀 시트에서 상·측면 이미지를 자동으로 정밀하게 분리해내어 폴더별 일괄 추출합니다.</p>
+    </div>
+  </div>
+
+  <style>
+    @keyframes floatOrb {
+      0% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(30px, 40px) scale(1.05); }
+      100% { transform: translate(0, 0) scale(1); }
+    }
+    .hover-card:hover {
+      transform: translateY(-8px) scale(1.02);
+      background: rgba(255,255,255,0.04) !important;
+      border-color: rgba(255,255,255,0.15) !important;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .hover-card:hover .card-glow {
+      opacity: 1 !important;
+    }
+    #startup-modal {
+      transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  </style>
+</div>
+
+<div class="app">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">📋 샘플 라이브러리</div>
+      <div class="sidebar-hint">엑셀 파일을 화면에 드래그하거나 [불러오기]를 사용하세요.<br>
+        샘플을 오른쪽 열로 드래그하거나 ➕ 버튼으로 추가할 수 있습니다.</div>
+    </div>
+    <div id="sample-list"></div>
+  </aside>
+
+  <!-- ── Workspace ── -->
+  <main class="workspace">
+    <div class="toolbar">
+      <div class="toolbar-title">S_Reposer <span style="color:#00ffc3;font-size:13px;">v4.0</span></div>
+      <label class="btn btn-file">
+        📂 엑셀 불러오기
+        <input type="file" accept=".xls,.xlsx" onchange="handleFileBtn(this.files[0])">
+      </label>
+      <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.07);padding:5px 12px;border-radius:8px; flex-wrap: wrap;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="font-size:11px;color:#aaa;">헤더</span>
+          <input type="range" id="header-size" min="10" max="60" value="20" step="1"
+            style="width:70px;cursor:pointer;" oninput="updateStyles()">
+          <span id="header-size-val" style="font-size:11px;color:#00ffc3;width:18px;">20</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="font-size:11px;color:#aaa;">라벨</span>
+          <input type="range" id="pass-size" min="10" max="60" value="20" step="1"
+            style="width:70px;cursor:pointer;" oninput="updateStyles()">
+          <span id="pass-size-val" style="font-size:11px;color:#00ffc3;width:18px;">20</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="font-size:11px;color:#aaa;">헤더배경</span>
+          <input type="color" id="color-h-bg" value="#1e2a3a" oninput="updateStyles()" style="width:24px;height:24px;border:none;padding:0;background:none;cursor:pointer;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="font-size:11px;color:#aaa;">헤더글자</span>
+          <input type="color" id="color-h-txt" value="#ffffff" oninput="updateStyles()" style="width:24px;height:24px;border:none;padding:0;background:none;cursor:pointer;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="font-size:11px;color:#aaa;">라벨글자</span>
+          <input type="color" id="color-p-txt" value="#111111" oninput="updateStyles()" style="width:24px;height:24px;border:none;padding:0;background:none;cursor:pointer;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="font-size:11px;color:#aaa;">선 굵기</span>
+          <input type="range" id="border-w" min="0" max="5" value="1" step="0.5"
+            style="width:70px;cursor:pointer;" oninput="updateStyles()">
+          <span id="border-w-val" style="font-size:11px;color:#00ffc3;width:18px;">1</span>
+        </div>
+      </div>
+      <button class="btn btn-export" onclick="exportPNG()">📷 PNG 저장</button>
+      <button class="btn" id="undo-btn" onclick="undoWorkspace()" title="Ctrl+Z" style="background:#8e44ad;">↶ 실행취소</button>
+      <button class="btn btn-clear" onclick="clearAll()">🗑 초기화</button>
+    </div>
+
+    <div class="grid-scroll">
+      <div class="grid-inner">
+        <div id="report-grid">
+          <!-- 동적으로 생성됩니다 -->
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+
+
+<script>
+// ═══ State ═══
+let D = null;           // excelData from server
+let workspace = [];     // [colIdx] = [{set, setIdx}]
+let dragSrcIdx = null;  // library item being dragged (set index)
+let gradeKeys = [];     // original grade column keys from Excel
+let columnTitles = [];  // editable titles for each column
+let undoStack = [];
+const MAX_UNDO = 50;
+
+// ═══ Init ═══
+window.onload = () => {
+  // data.json 로드 로직 제거 (404 방지)
+  updateUndoButton();
+};
+
+// ═══ File input button ═══
+function handleFileBtn(file) { if (file) uploadFile(file); }
+
+// ═══ Body drag-drop (Excel file) ═══
+document.body.addEventListener('dragover', e => {
+  // Only intercept file drops (not library item drags)
+  if (e.dataTransfer.types.includes('Files')) e.preventDefault();
+});
+document.body.addEventListener('drop', async e => {
+  if (!e.dataTransfer.types.includes('Files')) return;
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.name.match(/\.(xls|xlsx)$/i)) return;
+  await uploadFile(file);
+});
+
+async function uploadFile(file) {
+  // .xls 파일이면 Excel 프로세스 점유 여부 확인
+  if (file.name.toLowerCase().endsWith('.xls')) {
+    try {
+      const chk = await fetch('/api/check_excel');
+      const chkData = await chk.json();
+      if (chkData.running) {
+        const ok = confirm(
+          'Excel이 실행 중입니다 (PID: ' + chkData.pids.join(', ') + ').\n\n' +
+          'Excel COM 충돌로 파일을 읽지 못할 수 있습니다.\n' +
+          'Excel을 종료하고 계속 진행할까요?\n\n' +
+          '(저장 안 된 작업이 있으면 손실될 수 있습니다)'
+        );
+        if (!ok) return;
+        await fetch('/api/kill_excel', { method: 'POST' });
+      }
+    } catch(e) { /* 체크 실패해도 그냥 진행 */ }
+  }
+
+  showOverlay('엑셀 분석 중... 이미지 크롭 및 추출 중...');
+  try {
+    const fd = new FormData(); fd.append('file', file);
+    const r = await fetch('/analyze', { method: 'POST', body: fd });
+    if (r.ok) { D = await r.json(); initFromData(); }
+    else { const e = await r.json(); alert('❌ 분석 실패: ' + (e.error || '서버 오류')); }
+  } catch(e) { alert('❌ 서버에 연결 실패. app_server.py 실행 여부를 확인하세요.'); }
+  finally { hideOverlay(); }
+}
+
+// ═══ Init: auto-place all samples ═══
+function initFromData() {
+  const gradeMap = {};
+  D.image_sets.forEach((s, i) => {
+    const ck = s.col_range[0];
+    if (!gradeMap[ck]) gradeMap[ck] = [];
+    gradeMap[ck].push({ set: s, idx: i });
+  });
+  gradeKeys = Object.keys(gradeMap).sort((a,b) => +a - +b);
+
+  // workspace를 데이터 열 수에 맞춰 동적 생성
+  workspace = gradeKeys.map(k => {
+    const col = gradeMap[k];
+    col.sort((a,b) => a.set.pass - b.set.pass);
+    return col;
+  });
+  columnTitles = workspace.map(col => col[0]?.set.grade || '-');
+  undoStack = [];
+
+  renderLibrary();
+  renderGrid();
+}
+
+function cloneWorkspaceState() {
+  return workspace.map(col => col.map(item => ({ ...item })));
+}
+
+function cloneTitlesState() {
+  return [...columnTitles];
+}
+
+function pushUndoState() {
+  if (!D) return;
+  undoStack.push({
+    workspace: cloneWorkspaceState(),
+    columnTitles: cloneTitlesState(),
+  });
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  updateUndoButton();
+}
+
+function restoreState(snapshot) {
+  workspace = snapshot.workspace.map(col => col.map(item => ({ ...item })));
+  columnTitles = [...snapshot.columnTitles];
+  renderLibrary();
+  renderGrid();
+}
+
+function undoWorkspace() {
+  const snapshot = undoStack.pop();
+  if (!snapshot) return;
+  restoreState(snapshot);
+}
+
+function updateUndoButton() {
+  const btn = document.getElementById('undo-btn');
+  if (!btn) return;
+  btn.disabled = undoStack.length === 0;
+  btn.style.opacity = btn.disabled ? '0.45' : '1';
+  btn.style.cursor = btn.disabled ? 'not-allowed' : 'pointer';
+}
+
+// ═══ Library: grouped by grade ═══
+function renderLibrary() {
+  if (!D) return;
+  const list = document.getElementById('sample-list');
+  list.innerHTML = '';
+
+  const inWS = idx => workspace.some(col => col.some(c => c.idx === idx));
+
+  // Group by grade
+  const groups = {};
+  D.image_sets.forEach((s, i) => {
+    const g = s.grade || '기타';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push({ set: s, idx: i });
+  });
+
+  Object.entries(groups).forEach(([grade, items]) => {
+    const grp = document.createElement('div');
+    grp.className = 'grade-group';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'grade-header';
+    hdr.innerHTML = `<span>${grade}</span><span class="grade-toggle open">▶</span>`;
+    hdr.onclick = () => {
+      const body = grp.querySelector('.grade-items');
+      const tog = hdr.querySelector('.grade-toggle');
+      body.classList.toggle('collapsed');
+      tog.classList.toggle('open');
+    };
+    grp.appendChild(hdr);
+
+    const body = document.createElement('div');
+    body.className = 'grade-items';
+
+    items.forEach(({ set: s, idx: i }) => {
+      const div = document.createElement('div');
+      div.className = 'lib-item' + (inWS(i) ? ' used' : '');
+      div.id = `lib-${i}`;
+      div.draggable = !inWS(i);
+      div.dataset.setIdx = i;
+      div.innerHTML = `<span class="lib-pass">${s.pass}P</span>
+        <button class="lib-add" onclick="addByIdx(${i})">➕</button>`;
+
+      // Drag start (library → column)
+      div.addEventListener('dragstart', e => {
+        if (div.classList.contains('used')) { e.preventDefault(); return; }
+        dragSrcIdx = i;
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', String(i));
+      });
+      div.addEventListener('dragend', () => { dragSrcIdx = null; });
+
+      body.appendChild(div);
+    });
+    grp.appendChild(body);
+    list.appendChild(grp);
+  });
+}
+
+// ═══ Grid column: drop target ═══
+function setupColDrop(colDiv, ci) {
+  colDiv.addEventListener('dragover', e => {
+    if (dragSrcIdx === null) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+    colDiv.classList.add('drag-over');
+  });
+  colDiv.addEventListener('dragleave', () => colDiv.classList.remove('drag-over'));
+  colDiv.addEventListener('drop', e => {
+    colDiv.classList.remove('drag-over');
+    if (dragSrcIdx === null) return;
+    e.preventDefault();
+    const alreadyIn = workspace[ci].some(c => c.idx === dragSrcIdx);
+    if (!alreadyIn) {
+      pushUndoState();
+      const s = D.image_sets[dragSrcIdx];
+      workspace[ci].push({ set: s, idx: dragSrcIdx });
+      renderLibrary(); renderGrid();
+    }
+    dragSrcIdx = null;
+  });
+}
+
+// ═══ Render grid ═══
+function renderGrid() {
+  const grid = document.getElementById('report-grid');
+  const numCols = workspace.length;
+
+  // 그리드 열 수 업데이트
+  grid.style.gridTemplateColumns = `repeat(${numCols}, auto)`;
+
+  // 기존 내용 전체 지우고 재생성
+  grid.innerHTML = '';
+
+  workspace.forEach((col, ci) => {
+    // 엑셀 기준 폭 계산 (홀수열 + 그 다음 열)
+    let totalW = 200; // 기본값
+    if (col.length > 0) {
+      const s = col[0].set;
+      const cs = s.col_range[0], ce = s.col_range[1];
+      let sum = 0;
+      for (let c = cs; c < ce; c++) sum += (+D.col_w[String(c)] || 64) * 1.3;
+      if (sum > 0) totalW = sum;
+    }
+
+    // col-div 생성
+    const colDiv = document.createElement('div');
+    colDiv.className = 'grid-col';
+    colDiv.id = `col-${ci}`;
+    colDiv.style.width = totalW + 'px';
+    colDiv.style.minWidth = totalW + 'px';
+
+    const grade = columnTitles[ci] ?? (col.length > 0 ? col[0].set.grade : '-');
+    
+    const hdrContainer = document.createElement('div');
+    hdrContainer.className = 'header-container';
+    hdrContainer.style.width = '100%';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'col-header';
+    hdr.contentEditable = true;
+    hdr.spellcheck = false;
+    hdr.title = '클릭하여 제목 수정';
+    hdr.textContent = grade;
+    hdr.style.width = '100%'; // 상위 colDiv 폭(totalW)에 맞춤
+    hdr.addEventListener('focus', () => {
+      hdr.dataset.beforeEdit = hdr.textContent;
+    });
+    hdr.addEventListener('blur', () => {
+      const nextTitle = hdr.textContent.trim() || (col[0]?.set.grade || '-');
+      const prevTitle = hdr.dataset.beforeEdit ?? '';
+      hdr.textContent = nextTitle;
+      if (nextTitle !== prevTitle) {
+        pushUndoState();
+        columnTitles[ci] = nextTitle;
+        updateUndoButton();
+      }
+    });
+    hdrContainer.appendChild(hdr);
+
+    const rmColBtn = document.createElement('button');
+    rmColBtn.className = 'remove-col-btn';
+    rmColBtn.textContent = '✕';
+    rmColBtn.title = '열 삭제';
+    rmColBtn.onclick = (e) => {
+      e.stopPropagation();
+      pushUndoState();
+      workspace.splice(ci, 1);
+      columnTitles.splice(ci, 1);
+      renderLibrary();
+      renderGrid();
+    };
+    hdrContainer.appendChild(rmColBtn);
+    colDiv.appendChild(hdrContainer);
+
+    setupColDrop(colDiv, ci);
+
+    col.forEach((item, si) => {
+      const card = document.createElement('div');
+      card.className = 'sample-card';
+      card.style.width = '100%'; // 상위 colDiv 폭에 맞춤
+
+      const xBtn = document.createElement('button');
+      xBtn.className = 'remove-btn'; xBtn.textContent = '✕';
+      xBtn.onclick = () => {
+        pushUndoState();
+        workspace[ci].splice(si, 1);
+        renderLibrary();
+        renderGrid();
+      };
+      card.appendChild(xBtn);
+
+      card.insertAdjacentHTML('beforeend', buildSampleHTML(item.set));
+      colDiv.appendChild(card);
+    });
+
+    grid.appendChild(colDiv); // 그리드에 열 추가
+  });
+
+  // 그리드 생성 후 현재 설정된 스타일 즉시 적용
+  updateStyles();
+  updateUndoButton();
+}
+
+// ═══ Build HTML for one sample ═══
+function buildSampleHTML(s) {
+  const rs = s.row_range[0], re = s.row_range[1];
+  const cs = s.col_range[0], ce = s.col_range[1];
+  const passStr = `${s.pass}P`;
+
+  // Column widths
+  const colWidths = [];
+  for (let c = cs; c < ce; c++) colWidths.push((+D.col_w[String(c)] || 64) * 1.3);
+
+  // Build skip set from merges + image spans
+  const spanMap = {}, skip = new Set();
+  (D.merges || []).forEach(([rlo, rhi, clo, chi]) => {
+    if (rlo >= rs && rlo < re && clo >= cs && clo < ce) {
+      const ars = Math.min(rhi - rlo, re - rlo);
+      const acs = Math.min(chi - clo, ce - clo);
+      spanMap[`${rlo},${clo}`] = { rs: ars, cs: acs };
+      for (let rr = rlo; rr < rlo + ars; rr++)
+        for (let cc = clo; cc < clo + acs; cc++)
+          if (rr !== rlo || cc !== clo) skip.add(`${rr},${cc}`);
+    }
+  });
+  for (let r = rs; r < re; r++) {
+    for (let c = cs; c < ce; c++) {
+      const imgs = D.img_cells[`${r},${c}`];
+      if (!imgs) continue;
+      const ars = Math.min(imgs[0].rs || 1, re - r);
+      const acs = Math.min(imgs[0].cs || 1, ce - c);
+      if (!spanMap[`${r},${c}`]) spanMap[`${r},${c}`] = { rs: ars, cs: acs };
+      for (let rr = r; rr < r + ars; rr++)
+        for (let cc = c; cc < c + acs; cc++)
+          if (rr !== r || cc !== c) skip.add(`${rr},${cc}`);
+    }
+  }
+
+  // sideCol = column with fewest images → put pass label below
+  const colImgCount = {};
+  for (let r = rs; r < re; r++)
+    for (let c = cs; c < ce; c++)
+      if (D.img_cells[`${r},${c}`]) colImgCount[c] = (colImgCount[c]||0)+1;
+  const sideCol = Object.keys(colImgCount).length
+    ? +Object.keys(colImgCount).reduce((a,b) => colImgCount[a] <= colImgCount[b] ? a : b)
+    : -1;
+
+  let colTags = '<colgroup>';
+  for (let c = cs; c < ce; c++) colTags += `<col style="width:${colWidths[c-cs]}px">`;
+  colTags += '</colgroup>';
+
+  let passPlaced = false, rows = '';
+  const bW = document.getElementById('border-w')?.value || 1;
+  const bStyle = `border:${bW}px solid #000;`;
+
+  for (let r = rs; r < re; r++) {
+    rows += '<tr>';
+    for (let c = cs; c < ce; c++) {
+      const key = `${r},${c}`;
+      if (skip.has(key)) continue;
+      const sp = spanMap[key] || { rs:1, cs:1 };
+      const attrs = (sp.rs>1 ? ` rowspan="${sp.rs}"` : '') + (sp.cs>1 ? ` colspan="${sp.cs}"` : '');
+      const cellW = colWidths.slice(c-cs, c-cs+sp.cs).reduce((a,b)=>a+b, 0);
+      const imgs = D.img_cells[key];
+      const txt  = D.text_cells[key];
+
+      if (imgs) {
+        const crater = imgs.find(i => i.is_crater);
+        const rPart  = imgs.find(i => i.is_r_part);
+        let inner = '';
+
+        if (crater && rPart) {
+          // Pre-cropped images: aspect ratio already baked in
+          const cB64 = D.img_b64[crater.cache_key];
+          const rB64 = D.img_b64[rPart.cache_key];
+          const rPct = rPart.crop_w > 0 && crater.crop_w > 0
+            ? (rPart.crop_w / crater.crop_w * 100).toFixed(1)
+            : (rPart.disp_w / crater.disp_w * 100).toFixed(1);
+          inner = `<div style="position:relative; width:100%; line-height:0;">
+            <img src="data:image/jpeg;base64,${cB64}" style="width:100%; height:auto; display:block;">
+            <img src="data:image/jpeg;base64,${rB64}" style="position:absolute; top:0; right:0; width:${rPct}%; height:auto; box-shadow:0 0 4px rgba(0,0,0,0.5);">
+          </div>`;
+        } else {
+          imgs.forEach(inf => {
+            const b64 = D.img_b64[inf.cache_key];
+            inner += `<img src="data:image/jpeg;base64,${b64}" style="width:100%; height:auto; display:block;">`;
+          });
+        }
+
+        rows += `<td${attrs} class="img-cell" style="width:${cellW}px; ${bStyle}">${inner}</td>`;
+
+      } else if (txt) {
+        rows += `<td${attrs} class="txt-cell" style="width:${cellW}px; ${bStyle}">${txt}</td>`;
+      } else {
+        let content = '';
+        if (!passPlaced && c === sideCol) {
+          // 정중앙 배치 및 폰트 20px 기본 적용 (색상 포함)
+          const pCol = document.getElementById('color-p-txt')?.value || '#111111';
+          const pSize = document.getElementById('pass-size')?.value || 20;
+          content = `<div class="pass-label" style="text-align:center;font-weight:bold;font-size:${pSize}px;padding:12px;color:${pCol};">${passStr}</div>`;
+          passPlaced = true;
+        }
+        rows += `<td${attrs} style="width:${cellW}px; background:#fff; ${bStyle}">${content}</td>`;
+      }
+    }
+    rows += '</tr>';
+  }
+
+  if (!passPlaced) {
+    const tw = colWidths.reduce((a,b)=>a+b,0);
+    rows += `<tr><td colspan="${ce-cs}" style="text-align:center;font-weight:bold;font-size:16px;padding:7px;border:1px solid #000;width:${tw}px;">${passStr}</td></tr>`;
+  }
+
+  return `<table class="sample-table">${colTags}<tbody>${rows}</tbody></table>`;
+}
+
+// ═══ Add by index (➕ button) ═══
+function addByIdx(i) {
+  if (workspace.some(col => col.some(c => c.idx === i))) return;
+  pushUndoState();
+  const s = D.image_sets[i];
+  
+  // 1. 같은 등급(grade)을 가진 열이 있는지 먼저 찾기
+  let ci = workspace.findIndex(c => c.length > 0 && c[0].set.grade === s.grade);
+  
+  if (ci === -1) {
+    if (workspace.length === 0) {
+      // 열이 하나도 없으면 새로 생성
+      workspace.push([{ set: s, idx: i }]);
+      columnTitles.push(s.grade || '-');
+    } else {
+      // 가장 짧은 열에 추가
+      ci = workspace.reduce((p, c, ii, a) => a[p].length <= c.length ? p : ii, 0);
+      workspace[ci].push({ set: s, idx: i });
+    }
+  } else {
+    workspace[ci].push({ set: s, idx: i });
+  }
+  renderLibrary(); renderGrid();
+}
+
+function clearAll() { 
+  pushUndoState();
+  // 원본 열 구조(공백 상태)로 초기화
+  workspace = gradeKeys.length > 0 ? gradeKeys.map(() => []) : []; 
+  renderLibrary(); 
+  renderGrid(); 
+}
+
+document.addEventListener('keydown', e => {
+  const isUndo = (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z';
+  if (!isUndo) return;
+
+  const target = e.target;
+  const isEditable = target instanceof HTMLElement &&
+    (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+
+  if (isEditable) return;
+  if (undoStack.length === 0) return;
+
+  e.preventDefault();
+  undoWorkspace();
+});
+
+function updateStyles() {
+  const sz = document.getElementById('header-size')?.value || 20;
+  const psz = document.getElementById('pass-size')?.value || 20;
+  const hbg = document.getElementById('color-h-bg')?.value || '#1e2a3a';
+  const htxt = document.getElementById('color-h-txt')?.value || '#ffffff';
+  const ptxt = document.getElementById('color-p-txt')?.value || '#111111';
+  const bw = document.getElementById('border-w')?.value || 1;
+
+  const szVal = document.getElementById('header-size-val');
+  if (szVal) szVal.textContent = sz;
+  const pszVal = document.getElementById('pass-size-val');
+  if (pszVal) pszVal.textContent = psz;
+  const bwVal = document.getElementById('border-w-val');
+  if (bwVal) bwVal.textContent = bw;
+  
+  document.querySelectorAll('.col-header').forEach(h => {
+    h.style.fontSize = sz + 'px';
+    h.style.backgroundColor = hbg;
+    h.style.color = htxt;
+    h.style.borderBottomWidth = bw + 'px';
+  });
+  
+  document.querySelectorAll('.pass-label').forEach(p => {
+    p.style.color = ptxt;
+    p.style.fontSize = psz + 'px';
+  });
+
+  document.querySelectorAll('.sample-table td').forEach(td => {
+    td.style.borderWidth = bw + 'px';
+  });
+  
+  const grid = document.getElementById('report-grid');
+  if (grid) {
+    grid.style.borderWidth = (bw*2) + 'px';
+    document.querySelectorAll('.grid-col').forEach(col => {
+      col.style.borderRightWidth = bw + 'px';
+    });
+  }
+}
+
+async function exportPNG() {
+  const el = document.getElementById('report-grid');
+  // 1. 헤더 맨 위로 고정하기 위해 스크롤 영역을 맨 위로 이동
+  const scrollArea = document.querySelector('.grid-scroll');
+  const oldScrollPos = scrollArea.scrollTop;
+  scrollArea.scrollTop = 0;
+
+  // 2. html2canvas에서 sticky elements 이슈를 피하기 위해 잠시 sticky 해제
+  const headerContainers = document.querySelectorAll('.header-container');
+  headerContainers.forEach(h => {
+    h.style.position = 'static';
+  });
+
+  try {
+    const canvas = await html2canvas(el, { 
+      scale: 3, 
+      useCORS: true,
+      logging: false,
+      scrollX: 0,
+      scrollY: -window.scrollY // Ensure no offset
+    });
+    const a = document.createElement('a');
+    a.download = `cutting_eval_${Date.now()}.png`;
+    a.href = canvas.toDataURL('image/png'); 
+    a.click();
+  } finally {
+    // 3. 다시 원래 상태로 복구
+    headerContainers.forEach(h => {
+      h.style.position = 'sticky';
+    });
+    scrollArea.scrollTop = oldScrollPos;
+  }
+}
+function showOverlay(msg) { document.getElementById('overlay-msg').textContent = msg; document.getElementById('drop-overlay').style.display='flex'; }
+function hideOverlay() { document.getElementById('drop-overlay').style.display='none'; }
+
+async function runExtractor() {
+    showOverlay('파일 선택 창을 엽니다... 작업 표시줄을 확인하세요!');
+    try {
+        const r = await fetch('/api/get_file');
+        const d = await r.json();
+        
+        if (!d.path) {
+            hideOverlay();
+            return;
+        }
+        
+        showOverlay('추출 준비 중...');
+        
+        const evtSource = new EventSource(`/api/do_extract?path=${encodeURIComponent(d.path)}`);
+        
+        evtSource.onmessage = (e) => {
+            const txt = e.data;
+            if (txt.startsWith('ERROR:')) {
+                alert('오류 발생: ' + txt.substring(6));
+                evtSource.close();
+                hideOverlay();
+            } else if (txt.startsWith('DONE_SUCCESS')) {
+                const parts = txt.split('|');
+                document.getElementById('overlay-msg').innerHTML = `<span style="color:#00ffc3">✅ ${parts[1]}</span>`;
+                const progressDiv = document.getElementById('progress-log');
+                progressDiv.innerHTML += `<div style="color:#00ffc3; margin-top:10px;">> 추출 작업이 모두 완료되었습니다!</div>`;
+                progressDiv.scrollTop = progressDiv.scrollHeight;
+                
+                // Allow user a moment to see the completion screen
+                setTimeout(() => {
+                    alert(`✅ 완벽하게 추출 완료!\n${parts[1]}`);
+                    evtSource.close();
+                    hideOverlay();
+                }, 1000);
+            } else {
+                document.getElementById('overlay-msg').textContent = txt.replace('data: ', '');
+                const progressDiv = document.getElementById('progress-log');
+                progressDiv.innerHTML += `<div>> ${txt.replace('data: ', '')}</div>`;
+                progressDiv.scrollTop = progressDiv.scrollHeight;
+            }
+        };
+        evtSource.onerror = () => {
+            document.getElementById('overlay-msg').textContent = "서버와의 연결이 끊어졌습니다.";
+            setTimeout(() => {
+                evtSource.close();
+                hideOverlay();
+            }, 1000);
+        };
+        
+        // 초기화
+        document.getElementById('progress-log').innerHTML = '';
+    } catch (e) {
+        alert('❌ 서버 연결 실패. app_server.py가 실행중인지 확인하세요.');
+        hideOverlay();
+    }
+}
+</script>
+</body>
+</html>

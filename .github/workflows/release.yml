@@ -1,0 +1,41 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create release zip
+        run: |
+          mkdir -p _release
+          # 필요한 파일들만 복사 (데이터, 로그, 임시파일 제외)
+          rsync -a --exclude='.git' --exclude='.github' \
+            --exclude='_data' --exclude='_update_temp' \
+            --exclude='_update.zip' --exclude='CuttingEval-*.zip' \
+            --exclude='__pycache__' --exclude='*.spec' \
+            --exclude='dist' --exclude='build' \
+            --exclude='CuttingEval_App.exe' \
+            . _release/
+          
+          # version.txt에 현재 태그 저장
+          echo "${{ github.ref_name }}" > _release/version.txt
+          
+          cd _release && zip -r ../CuttingEval-${{ github.ref_name }}.zip .
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: CuttingEval-${{ github.ref_name }}.zip
+          name: Cutting Evaluation Tool ${{ github.ref_name }}
+          body: |
+            자동 업데이트 배포 패키지 (${{ github.ref_name }})
+            - 버그 수정 및 성능 개선

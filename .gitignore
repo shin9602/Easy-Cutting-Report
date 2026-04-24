@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.spec
+
+# Build & Dist
+build/
+dist/
+*.exe
+
+# App Data & Temp
+_data/
+_update_temp/
+_update.zip
+*.log
+
+# Editor
+.vscode/
+.idea/
+.editorconfig
