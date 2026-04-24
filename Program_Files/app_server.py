@@ -248,9 +248,9 @@ def do_extract():
 
 if __name__ == '__main__':
     port = 8888
-    print("=" * 50)
-    print(f" 🚀 [절삭평가 쉽게보기] v1.0.2 가동 중")
-    print(f" 🌐 접속 주소: http://localhost:{port}")
-    print("=" * 50)
+    print("--------------------------------------------------")
+    print(f"  Cutting Eval Tool v1.0.3 - Running")
+    print(f"  URL: http://localhost:{port}")
+    print("--------------------------------------------------")
     webbrowser.open(f"http://localhost:{port}/")
     app.run(host='0.0.0.0', port=port, debug=False)
