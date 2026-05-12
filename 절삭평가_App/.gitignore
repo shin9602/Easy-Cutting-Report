@@ -19,10 +19,3 @@ _update.zip
 .vscode/
 .idea/
 .editorconfig
-
-# Dev tools (Claude Code harness - not for release)
-.claude/
-Harness_Plugin/
-CLAUDE.md
-launcher.log
-_workspace/
